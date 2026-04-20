@@ -184,6 +184,25 @@ def compute_sharpness_gradient(model, criterion, dataset):
     return torch.autograd.grad(sharpness, params)
 
 
+def compute_beta_delta_sq(alpha, sharp_grad_perp):
+    """
+    Compute beta = ||∇S_t^⊥||² and delta_sq = 2 * alpha / beta.
+
+    alpha is clamped to zero before division to avoid a negative result.
+
+    Args:
+        alpha: PS coefficient α_t (scalar float).
+        sharp_grad_perp: List of param-shaped tensors — ∇S_t^⊥.
+
+    Returns:
+        beta: Scalar float — ||∇S_t^⊥||².
+        delta_sq: Scalar float — 2 * max(alpha, 0) / beta.
+    """
+    beta = sum(torch.sum(g ** 2) for g in sharp_grad_perp).item()
+    delta_sq = 2 * max(alpha, 0) / beta if beta > 1e-30 else 0.0
+    return beta, delta_sq
+
+
 def compute_ps_coefficient(model, criterion, dataset, sharp_grad):
     """
     Compute the progressive sharpening (PS) coefficient:
@@ -206,24 +225,3 @@ def compute_ps_coefficient(model, criterion, dataset, sharp_grad):
                                             shuffle=False))
     loss_grad = compute_loss_gradient(model, criterion, inputs, labels)
     return -sum(torch.sum(sg * lg) for sg, lg in zip(sharp_grad, loss_grad)).item()
-
-
-def compute_delta(alpha, gradient_noise):
-    """
-    Compute delta = sqrt(2 * alpha / beta), where beta is the squared norm of
-    the gradient noise vector.
-
-    alpha is clamped to zero before division to avoid taking the square root
-    of a negative value.
-
-    Args:
-        alpha: PS coefficient (scalar float), as returned by
-               compute_ps_coefficient.
-        gradient_noise: List of param-shaped tensors, as returned by
-                        compute_gradient_noise.
-
-    Returns:
-        delta: Scalar float.
-    """
-    beta = sum(torch.sum(g ** 2) for g in gradient_noise).item()
-    return (2 * max(alpha, 0) / beta) ** 0.5

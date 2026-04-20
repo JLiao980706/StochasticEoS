@@ -1,5 +1,13 @@
 import torch
 from torch.utils.data import DataLoader, Subset
+from data import labels_to_onehot
+
+
+def log_state_dict(folder: str, step: int, model: torch.nn.Module) -> None:
+    """Save model state dict to `folder/ckpt_{step}.pt`."""
+    import os
+    os.makedirs(folder, exist_ok=True)
+    torch.save(model.state_dict(), os.path.join(folder, f'ckpt_{step}.pt'))
 
 
 def get_device() -> torch.device:
@@ -38,6 +46,27 @@ def param_inner(a, b):
     return sum(torch.sum(ai * bi) for ai, bi in zip(a, b))
 
 
+def param_add(p1, p2, c=1.0):
+    """Return p1 + c * p2 element-wise over lists of param-shaped tensors."""
+    return [a + c * b for a, b in zip(p1, p2)]
+
+
+def proj_orthogonal(v, u):
+    """
+    Project v onto the orthogonal complement of u: v - <v, u> * u.
+    Assumes u is a unit vector (as returned by Lanczos).
+
+    Args:
+        v: List of param-shaped tensors.
+        u: List of param-shaped tensors (unit vector).
+
+    Returns:
+        List of param-shaped tensors equal to v - <v, u> * u.
+    """
+    coeff = param_inner(v, u)
+    return param_add(v, u, -coeff)
+
+
 def compute_loss_gradient(model, criterion, inputs, labels, create_graph=False):
     """
     Compute the loss gradient w.r.t. all trainable model parameters.
@@ -58,7 +87,8 @@ def compute_loss_gradient(model, criterion, inputs, labels, create_graph=False):
     """
     model.zero_grad()
     params = [p for p in model.parameters() if p.requires_grad]
-    loss = criterion(model(inputs), labels)
+    targets = labels_to_onehot(labels) if labels.dim() == 1 else labels
+    loss = criterion(model(inputs), targets)
     grads = torch.autograd.grad(loss, params, create_graph=create_graph)
     return list(grads) if create_graph else [g.detach() for g in grads]
 
@@ -95,7 +125,7 @@ def compute_gradient_noise(model, criterion, dataset, batch_size):
     )
     g_full = compute_loss_gradient(model, criterion, full_inputs, full_labels)
 
-    return [gb - gf for gb, gf in zip(g_batch, g_full)]
+    return param_add(g_batch, g_full, -1)
 
 
 def proj_stable_set(model, criterion, dataset, eta, max_iter=100, tol=1e-6):
