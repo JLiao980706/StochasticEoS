@@ -311,6 +311,7 @@ def generate_predicted_dynamic(model, criterion, dataset, eta, num_steps,
     u_next = [v.detach() for v in u_next]
 
     x_hat_list, y_hat_list = [], []
+    alpha_list, beta_list, noise_u_list, noise_sharp_list = [], [], [], []
 
     for t in range(num_steps):
         u = u_next  # u_t, cached from end of previous iteration
@@ -335,7 +336,9 @@ def generate_predicted_dynamic(model, criterion, dataset, eta, num_steps,
         y_hat_list.append(y_hat_t)
 
         alpha_t = -param_inner(sharp_grad, loss_grad).item()
-        _, delta_sq_t = compute_beta_delta_sq(alpha_t, sharp_grad_perp)
+        beta_t, delta_sq_t = compute_beta_delta_sq(alpha_t, sharp_grad_perp)
+        alpha_list.append(alpha_t)
+        beta_list.append(beta_t)
 
         kappa_t = param_inner(sharp_grad, u).item()
 
@@ -361,9 +364,11 @@ def generate_predicted_dynamic(model, criterion, dataset, eta, num_steps,
         scalar_u = ((1 + eta * y_hat_t) * x_hat_t
                     + (eta / 2) * kappa_t * x_hat_t ** 2)
         xi_t = noises[t]
+        noise_u_list.append(param_inner(xi_t, u).item())
+        noise_sharp_list.append(param_inner(xi_t, sharp_grad).item())
         v_hat = param_add(param_add(g_t, u_next, -(g_proj + scalar_u)), xi_t, -eta)
 
-    return x_hat_list, y_hat_list
+    return x_hat_list, y_hat_list, alpha_list, beta_list, noise_u_list, noise_sharp_list
 
 
 def compute_trajectory_stats(model, criterion, dataset, batch_size):
