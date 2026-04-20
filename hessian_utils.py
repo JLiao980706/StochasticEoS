@@ -65,7 +65,7 @@ def hessian_vector_product(model, criterion, inputs, labels, vector):
                                retain_graph=False)
 
 
-def lanczos(mat_vec_func, params, device, top_dim=1):
+def lanczos(mat_vec_func, params, device, top_dim=1, init_vec=None):
     """
     Compute the top_dim largest-magnitude eigenvalues and corresponding
     eigenvectors of the symmetric linear operator defined by mat_vec_func,
@@ -77,6 +77,8 @@ def lanczos(mat_vec_func, params, device, top_dim=1):
         params: List of parameter tensors (used for shape reference).
         device: torch.device to place results on.
         top_dim: Number of top eigenpairs to return.
+        init_vec: Optional starting vector as a list of param-shaped tensors.
+                  If None, eigsh uses its default random initialisation.
 
     Returns:
         evals: Float tensor of shape (top_dim,), sorted by decreasing magnitude.
@@ -88,7 +90,8 @@ def lanczos(mat_vec_func, params, device, top_dim=1):
 
     dim = sum(p.numel() for p in params)
     operator = LinearOperator((dim, dim), matvec=mv)
-    evals_np, evecs_np = eigsh(operator, top_dim)
+    v0 = flatten_tensors(init_vec).cpu().numpy() if init_vec is not None else None
+    evals_np, evecs_np = eigsh(operator, top_dim, v0=v0)
     sort_idx = np.argsort(np.abs(evals_np))[::-1]
     evals = torch.from_numpy(evals_np[sort_idx].copy()).float()
     evecs = [
