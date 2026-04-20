@@ -356,7 +356,7 @@ def generate_predicted_dynamic(model, criterion, dataset, eta, num_steps,
             torch.load(os.path.join(ckpt_dir, f'ckpt_{t + 1}.pt'),
                        map_location=device)
         )
-        _, u_next = compute_sharpness(model, criterion, dataset)
+        _, u_next = compute_sharpness(model, criterion, dataset, init_vec=u)
         u_next = [v.detach() for v in u_next]
 
         # v_hat_{t+1}

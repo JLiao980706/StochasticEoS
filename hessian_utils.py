@@ -101,7 +101,7 @@ def lanczos(mat_vec_func, params, device, top_dim=1, init_vec=None):
     return evals, evecs
 
 
-def compute_hessian_top_eigenpairs(model, criterion, dataset, top_dim=1):
+def compute_hessian_top_eigenpairs(model, criterion, dataset, top_dim=1, init_vec=None):
     """
     Compute the top_dim largest eigenvalues and eigenvectors of the loss
     Hessian over the full dataset using the Lanczos algorithm.
@@ -111,6 +111,8 @@ def compute_hessian_top_eigenpairs(model, criterion, dataset, top_dim=1):
         criterion: Loss function.
         dataset: Dataset (loaded in full as a single batch).
         top_dim: Number of top eigenpairs to return.
+        init_vec: Optional starting vector as a list of param-shaped tensors
+                  passed to lanczos as v0. If None, uses random initialisation.
 
     Returns:
         evals: Float tensor of shape (top_dim,), sorted by decreasing magnitude.
@@ -122,10 +124,10 @@ def compute_hessian_top_eigenpairs(model, criterion, dataset, top_dim=1):
     params = get_params_grad(model)[0]
     mat_vec_func = lambda v: hessian_vector_product(model, criterion, inputs,
                                                     labels, v)
-    return lanczos(mat_vec_func, params, device, top_dim=top_dim)
+    return lanczos(mat_vec_func, params, device, top_dim=top_dim, init_vec=init_vec)
 
 
-def compute_sharpness(model, criterion, dataset):
+def compute_sharpness(model, criterion, dataset, init_vec=None):
     """
     Returns the largest eigenvalue of the loss Hessian (sharpness).
 
@@ -133,12 +135,15 @@ def compute_sharpness(model, criterion, dataset):
         model: PyTorch model.
         criterion: Loss function.
         dataset: Dataset (loaded in full as a single batch).
+        init_vec: Optional starting vector as a list of param-shaped tensors
+                  passed to lanczos as v0. If None, uses random initialisation.
 
     Returns:
         sharpness: Scalar float — the largest Hessian eigenvalue.
         evec: List of tensors (param-shaped) — the corresponding eigenvector.
     """
-    evals, evecs = compute_hessian_top_eigenpairs(model, criterion, dataset, top_dim=1)
+    evals, evecs = compute_hessian_top_eigenpairs(model, criterion, dataset,
+                                                  top_dim=1, init_vec=init_vec)
     return evals[0].item(), evecs[0]
 
 
